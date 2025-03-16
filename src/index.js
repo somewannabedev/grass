@@ -1,3 +1,5 @@
+// Modified index.js with infinite grass generation
+
 // Import the necessary Three.js components
 import * as THREE from "https://unpkg.com/three@0.138.0/build/three.module.js"
 
@@ -32,7 +34,6 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(0, 7, 12);
 camera.lookAt(0, 0, 0);
 
-
 // Create orbit controls to allow camera movement with the mouse
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true; // Smooth camera movement
@@ -66,12 +67,18 @@ scene.add(directionalLight);
 const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
 scene.add(ambientLight);
 
-// Create and add a grass field using the imported Grass class
-const grass = new Grass(30, 60000);  // 30x30 area with 60,000 blades of grass
-grass.castShadow = true;  // Allow grass to cast shadows
-grass.receiveShadow = true;  // Allow grass to receive shadows
-scene.add(grass);
+// === TILE SYSTEM CONFIGURATION ===
+const TILE_SIZE = 30;         // Size of each grass tile (30x30 units)
+const BLADE_COUNT = 60000;    // Number of grass blades per tile
+const ACTIVE_TILES_DISTANCE = 2; // How many tiles in each direction to keep active
+const TILE_GRID_SIZE = ACTIVE_TILES_DISTANCE * 2 + 1; // Total grid size (e.g., 5x5 with 2 tiles in each direction)
 
+// Store active grass tiles
+const grassTiles = new Map(); // Map with keys like "x,z" storing grass instances
+
+// Player's current tile coordinates
+let currentTileX = 0;
+let currentTileZ = 0;
 
 // Create a sphere-shaped object that the user can move
 const objectGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Sphere radius 0.5, 32 segments
@@ -81,22 +88,88 @@ controllableObject.castShadow = true;  // Enable shadows for the object
 controllableObject.position.set(0, 0.5, 0);  // Place object slightly above the ground
 scene.add(controllableObject);
 
-// Attempt to find an existing floor object in the scene
-const floor = scene.getObjectByName('floorMesh');
-
-if (floor) {
-    // If the floor already exists, enable shadow receiving
-    floor.receiveShadow = true;
-} else {
-    // Otherwise, create a new floor
-    const floorGeometry = new THREE.CircleGeometry(15, 8).rotateX(-Math.PI / 2);
-    const floorMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });  // Transparent material for shadows
-    const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
-    floorMesh.receiveShadow = true;  // Allow floor to receive shadows
-    floorMesh.position.y = -Number.EPSILON;  // Slightly lower the floor to prevent clipping issues
-    floorMesh.name = 'floorMesh';  // Assign a name to the floor
-    scene.add(floorMesh);
+// Function to create a grass tile at the specified grid coordinates
+function createGrassTile(tileX, tileZ) {
+    const key = `${tileX},${tileZ}`;
+    
+    // Check if tile already exists
+    if (grassTiles.has(key)) return;
+    
+    // Calculate world position for this tile
+    const worldX = tileX * TILE_SIZE;
+    const worldZ = tileZ * TILE_SIZE;
+    
+    // Create a new grass instance
+    const grass = new Grass(TILE_SIZE, BLADE_COUNT);
+    grass.position.set(worldX, 0, worldZ);
+    grass.castShadow = true;
+    grass.receiveShadow = true;
+    scene.add(grass);
+    
+    // Store the grass tile
+    grassTiles.set(key, grass);
 }
+
+// Function to remove a grass tile
+function removeGrassTile(tileX, tileZ) {
+    const key = `${tileX},${tileZ}`;
+    
+    // Check if tile exists
+    if (!grassTiles.has(key)) return;
+    
+    // Get the grass object
+    const grass = grassTiles.get(key);
+    
+    // Remove from scene and dispose of resources
+    scene.remove(grass);
+    grass.geometry.dispose();
+    grass.material.dispose();
+    
+    // Remove from our tracking Map
+    grassTiles.delete(key);
+}
+
+// Function to update active tiles based on player position
+function updateActiveTiles() {
+    // Calculate current tile coordinates based on player position
+    const newTileX = Math.floor(controllableObject.position.x / TILE_SIZE);
+    const newTileZ = Math.floor(controllableObject.position.z / TILE_SIZE);
+    
+    // If player has moved to a new tile
+    if (newTileX !== currentTileX || newTileZ !== currentTileZ) {
+        currentTileX = newTileX;
+        currentTileZ = newTileZ;
+        
+        // Calculate tile range to keep active
+        const minX = currentTileX - ACTIVE_TILES_DISTANCE;
+        const maxX = currentTileX + ACTIVE_TILES_DISTANCE;
+        const minZ = currentTileZ - ACTIVE_TILES_DISTANCE;
+        const maxZ = currentTileZ + ACTIVE_TILES_DISTANCE;
+        
+        // Create a set of keys for tiles that should be active
+        const activeKeys = new Set();
+        
+        // Create new tiles as needed
+        for (let x = minX; x <= maxX; x++) {
+            for (let z = minZ; z <= maxZ; z++) {
+                const key = `${x},${z}`;
+                activeKeys.add(key);
+                createGrassTile(x, z);
+            }
+        }
+        
+        // Remove tiles that are no longer needed
+        for (const key of grassTiles.keys()) {
+            if (!activeKeys.has(key)) {
+                const [x, z] = key.split(',').map(Number);
+                removeGrassTile(x, z);
+            }
+        }
+    }
+}
+
+// Initialize first grass tile at origin
+createGrassTile(0, 0);
 
 // Set movement speed for the controllable object
 const moveSpeed = 0.2;
@@ -105,7 +178,6 @@ const gravity = 0.02;      // Gravity force pulling the player down
 
 let isJumping = false;     // Flag to check if the player is in the air
 let velocityY = 0;         // Vertical velocity (for jumping and falling)
-let positionY = 0;         // Player's current vertical position
 
 // Track which movement keys are being pressed
 const keys = {
@@ -148,9 +220,6 @@ const followSpeed = 0.1; // Adjusts how smoothly the camera follows the sphere
 
 // The main animation loop (runs continuously)
 renderer.setAnimationLoop((time) => {
-    // Update the grass movement based on time and the object's position
-    grass.update(time, controllableObject.position);
-
     // Move the object based on pressed keys
     if (keys['w']) controllableObject.position.z -= moveSpeed;  // Move forward
     if (keys['s']) controllableObject.position.z += moveSpeed;  // Move backward
@@ -169,6 +238,27 @@ renderer.setAnimationLoop((time) => {
             isJumping = false;  // Player can jump again
         }
     }
+
+    // Check if we need to update tiles
+    updateActiveTiles();
+
+    // Update all active grass tiles
+    for (const grass of grassTiles.values()) {
+        // Calculate object position relative to this grass tile's origin
+        const relativePosX = controllableObject.position.x - grass.position.x;
+        const relativePosY = controllableObject.position.y;
+        const relativePosZ = controllableObject.position.z - grass.position.z;
+        
+        // Create a temporary vector for the relative position
+        const relativePos = new THREE.Vector3(relativePosX, relativePosY, relativePosZ);
+        
+        // Update the grass with the relative position
+        grass.update(time, relativePos);
+    }
+
+    // Move the directional light with the player
+    directionalLight.position.x = controllableObject.position.x + 10;
+    directionalLight.position.z = controllableObject.position.z + 5;
 
     // Smooth camera following
     const desiredPosition = controllableObject.position.clone().add(cameraOffset);

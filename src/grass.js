@@ -135,6 +135,7 @@ class Grass extends THREE.Mesh {
 
     // === CREATE FLOOR (GIVES THE GRASS A BASE) ===
     const floorGeometry = new THREE.CircleGeometry(15, 8).rotateX(-Math.PI / 2);
+    //const floorGeometry = new THREE.PlaneGeometry(15, 8).rotateX(-Math.PI / 2);
     const floorMaterial = material.clone(); // Use the same shader material
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     floor.position.y = -Number.EPSILON; // Slight offset to avoid z-fighting (visual glitch)
