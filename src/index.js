@@ -142,6 +142,10 @@ document.addEventListener('keyup', (event) => {
     }
 });
 
+// Camera follow offset (adjust as needed)
+const cameraOffset = new THREE.Vector3(-7, 4, 7); // Positioned behind and slightly above the sphere
+const followSpeed = 0.1; // Adjusts how smoothly the camera follows the sphere
+
 // The main animation loop (runs continuously)
 renderer.setAnimationLoop((time) => {
     // Update the grass movement based on time and the object's position
@@ -166,10 +170,14 @@ renderer.setAnimationLoop((time) => {
         }
     }
 
+    // Smooth camera following
+    const desiredPosition = controllableObject.position.clone().add(cameraOffset);
+    camera.position.lerp(desiredPosition, followSpeed); // Smoothly transition the camera to the new position
+
+    // Keep the camera looking at the sphere
+    controls.target.copy(controllableObject.position);
+
     // Update camera controls (smooth movement effect)
-    
-    //controls.object.position.copy(controllableObject.position).add(vec3);
-    //controls.target.copy(controllableObject.position);
     controls.update();
 
     // Render the updated scene
