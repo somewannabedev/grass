@@ -69,9 +69,9 @@ scene.add(ambientLight);
 
 // === TILE SYSTEM CONFIGURATION ===
 const TILE_WIDTH = 10;       // Width of the corridor (X axis)
-const TILE_LENGTH = 80;      // Length of each tile segment (Z axis)
-const BLADE_COUNT = 15000;   // Number of grass blades per tile
-const ACTIVE_TILES_AHEAD = 5;    // How many tiles to keep ahead of player
+const TILE_LENGTH = 78;      // Length of each tile segment (Z axis)
+const BLADE_COUNT = 20000;   // Number of grass blades per tile
+const ACTIVE_TILES_AHEAD = 3;    // How many tiles to keep ahead of player
 const ACTIVE_TILES_BEHIND = 1;   // How many tiles to keep behind player
 
 // Store active grass tiles
@@ -85,7 +85,7 @@ const objectGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Sphere radius 
 const objectMaterial = new THREE.MeshStandardMaterial({ color: 0x552299 });  // Set colour of sphere
 const controllableObject = new THREE.Mesh(objectGeometry, objectMaterial);
 controllableObject.castShadow = true;  // Enable shadows for the object
-controllableObject.position.set(0, 0.5, 0);  // Place object slightly above the ground
+controllableObject.position.set(0, 0.5, -50);  // Place object slightly above the ground
 scene.add(controllableObject);
 
 // Function to create a grass tile at the specified Z position
@@ -188,7 +188,7 @@ function keepPlayerCentered() {
 createGrassTile(0);
 
 // Set movement speed for the controllable object
-const moveSpeed = 0.7;
+const moveSpeed = 0.4;
 const jumpStrength = 0.4;  // Jump velocity strength
 const gravity = 0.02;      // Gravity force pulling the player down
 
