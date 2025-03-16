@@ -63,10 +63,10 @@ export const fragmentShader = /* glsl */ `
   varying vec3 vNormal;
 
   // Base grass color
-  //vec3 green = vec3(0.2, 0.6, 0.3); //original green
+  vec3 green = vec3(0.2, 0.6, 0.3); //original green
   //vec3 green = vec3(0.5, 0.4, 0.8); //purple
   //vec3 green = vec3(0.8, 0.0, 0.1); //red
-  vec3 green = vec3(1.0, 1.0, 0.8); //cream/yellow
+  //vec3 green = vec3(1.0, 1.0, 0.8); //cream/yellow
 
   void main() {
     // Vary color based on blade height - darker at base, brighter at tips

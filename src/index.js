@@ -29,8 +29,9 @@ const camera = new THREE.PerspectiveCamera(
 );
 
 // Position the camera so it looks at the center of the scene
-camera.position.set(-7, 3, 7);
+camera.position.set(-7, 4, 7);
 camera.lookAt(0, 0, 0);
+
 
 // Create orbit controls to allow camera movement with the mouse
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -71,9 +72,10 @@ grass.castShadow = true;  // Allow grass to cast shadows
 grass.receiveShadow = true;  // Allow grass to receive shadows
 scene.add(grass);
 
+
 // Create a sphere-shaped object that the user can move
 const objectGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Sphere radius 0.5, 32 segments
-const objectMaterial = new THREE.MeshStandardMaterial({ color: 0x995522 });  // Brownish color
+const objectMaterial = new THREE.MeshStandardMaterial({ color: 0x552299 });  // Set colour of sphere
 const controllableObject = new THREE.Mesh(objectGeometry, objectMaterial);
 controllableObject.castShadow = true;  // Enable shadows for the object
 controllableObject.position.set(0, 0.5, 0);  // Place object slightly above the ground
@@ -97,14 +99,21 @@ if (floor) {
 }
 
 // Set movement speed for the controllable object
-const moveSpeed = 0.1;
+const moveSpeed = 0.2;
+const jumpStrength = 0.4;  // Jump velocity strength
+const gravity = 0.02;      // Gravity force pulling the player down
+
+let isJumping = false;     // Flag to check if the player is in the air
+let velocityY = 0;         // Vertical velocity (for jumping and falling)
+let positionY = 0;         // Player's current vertical position
 
 // Track which movement keys are being pressed
 const keys = {
     'w': false, // Move forward
     'a': false, // Move left
     's': false, // Move backward
-    'd': false  // Move right
+    'd': false,  // Move right
+    'space': false // Jump
 };
 
 // Listen for key press events (when a key is pressed down)
@@ -114,6 +123,12 @@ document.addEventListener('keydown', (event) => {
         case 'a': keys['a'] = true; break;  // Pressing 'A' moves left
         case 's': keys['s'] = true; break;  // Pressing 'S' moves backward
         case 'd': keys['d'] = true; break;  // Pressing 'D' moves right
+        case ' ': // Spacebar for jumping
+            if (!isJumping) { // Only jump if the player is on the ground
+                velocityY = jumpStrength;  
+                isJumping = true;  
+            }
+            break;
     }
 });
 
@@ -138,7 +153,23 @@ renderer.setAnimationLoop((time) => {
     if (keys['a']) controllableObject.position.x -= moveSpeed;  // Move left
     if (keys['d']) controllableObject.position.x += moveSpeed;  // Move right
 
+    // Apply gravity and jump mechanics
+    if (isJumping) {
+        velocityY -= gravity;  // Apply gravity
+        controllableObject.position.y += velocityY;  // Update vertical position
+
+        // Check if the player has landed
+        if (controllableObject.position.y <= 0.5) {  
+            controllableObject.position.y = 0.5;  // Reset to ground level
+            velocityY = 0;  // Stop vertical movement
+            isJumping = false;  // Player can jump again
+        }
+    }
+
     // Update camera controls (smooth movement effect)
+    
+    //controls.object.position.copy(controllableObject.position).add(vec3);
+    //controls.target.copy(controllableObject.position);
     controls.update();
 
     // Render the updated scene
