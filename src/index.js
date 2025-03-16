@@ -29,7 +29,7 @@ const camera = new THREE.PerspectiveCamera(
 );
 
 // Position the camera so it looks at the center of the scene
-camera.position.set(-7, 4, 7);
+camera.position.set(0, 7, 12);
 camera.lookAt(0, 0, 0);
 
 
@@ -143,7 +143,7 @@ document.addEventListener('keyup', (event) => {
 });
 
 // Camera follow offset (adjust as needed)
-const cameraOffset = new THREE.Vector3(-7, 4, 7); // Positioned behind and slightly above the sphere
+const cameraOffset = new THREE.Vector3(0, 7, 12); // Positioned behind and slightly above the sphere
 const followSpeed = 0.1; // Adjusts how smoothly the camera follows the sphere
 
 // The main animation loop (runs continuously)
