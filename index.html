@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>WebGL Grass</title>
+    <meta charset="UTF-8" />
+    <style>
+      /* Remove default margins */
+      body {
+        margin: 0;
+      }
+
+      /* Style the canvas - "grab" cursor indicates the scene can be moved */
+      canvas {
+        cursor: grab;
+        display: block;
+      }
+
+      /* Change cursor when actively grabbing/moving the scene */
+      canvas:active {
+        cursor: grabbing;
+      }
+    </style>
+    <!-- Import map tells the browser where to find Three.js and its add-ons -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.138.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.148.0/examples/jsm/"
+            }
+        }
+    </script>
+  </head>
+  <body>
+    <!-- Load the main JavaScript module that sets up the scene -->
+    <script type="module" src="src/index.js"></script>
+  </body>
+</html>
