@@ -1,8 +1,6 @@
-// Remove OrbitControls (we don't need them anymore)
 import * as THREE from "https://unpkg.com/three@0.138.0/build/three.module.js";
-
-// Import custom Grass class
 import Grass from './modified-grass.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Create WebGL renderer
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -12,20 +10,15 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // Create perspective camera
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  100
-);
-camera.position.set(0, 5, -10); // Position camera behind the object
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 5, -10);
 camera.lookAt(0, 0, 0);
 
 // Create scene
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xf0f0f0);
 
-// Add lighting
+// Lighting
 const directionalLight = new THREE.DirectionalLight(0xffccaa, 1.5);
 directionalLight.position.set(10, 10, 5);
 directionalLight.castShadow = true;
@@ -46,13 +39,26 @@ grass.castShadow = true;
 grass.receiveShadow = true;
 scene.add(grass);
 
-// === CONTROLLABLE OBJECT ===
-const objectGeometry = new THREE.BoxGeometry(1.5, 0.3, 2.2);
-const objectMaterial = new THREE.MeshStandardMaterial({ color: 0x552299 });
-const controllableObject = new THREE.Mesh(objectGeometry, objectMaterial);
-controllableObject.castShadow = true;
-controllableObject.position.set(0, 0.5, 0);
-scene.add(controllableObject);
+// === CONTROLLABLE COLLISION BOX ===
+const collisionBoxGeometry = new THREE.BoxGeometry(1.5, 0.3, 2.2);
+const collisionBoxMaterial = new THREE.MeshStandardMaterial({ color: 0x552299, visible: false });
+const collisionBox = new THREE.Mesh(collisionBoxGeometry, collisionBoxMaterial);
+collisionBox.castShadow = true;
+collisionBox.position.set(0, 0.5, 0);
+scene.add(collisionBox);
+
+// === MOWER MODEL ===
+let mowerModel = null;
+
+const loader = new GLTFLoader();
+loader.load('/grassCutter/src/models/mower.gltf', function (gltf) {
+    mowerModel = gltf.scene;
+    mowerModel.scale.set(1.5, 1.5, 1.5);
+    mowerModel.position.copy(collisionBox.position); // Set initial position
+    scene.add(mowerModel);
+}, undefined, function (error) {
+    console.error(error);
+});
 
 // === MOVEMENT SETTINGS ===
 const moveSpeed = 0.1;
@@ -60,27 +66,20 @@ const rotationSpeed = 0.02;
 
 // Movement controls
 const keys = { 'w': false, 'a': false, 's': false, 'd': false, 'c': false };
+
 document.addEventListener('keydown', (event) => {
-    switch (event.key.toLowerCase()) {
-        case 'w': keys['w'] = true; break;
-        case 'a': keys['a'] = true; break;
-        case 's': keys['s'] = true; break;
-        case 'd': keys['d'] = true; break;
-        case 'c': keys['c'] = true; break;
+    if (keys.hasOwnProperty(event.key.toLowerCase())) {
+        keys[event.key.toLowerCase()] = true;
     }
 });
 document.addEventListener('keyup', (event) => {
-    switch (event.key.toLowerCase()) {
-        case 'w': keys['w'] = false; break;
-        case 'a': keys['a'] = false; break;
-        case 's': keys['s'] = false; break;
-        case 'd': keys['d'] = false; break;
-        case 'c': keys['c'] = false; break;
+    if (keys.hasOwnProperty(event.key.toLowerCase())) {
+        keys[event.key.toLowerCase()] = false;
     }
 });
 
 // Camera follow settings
-const cameraOffset = new THREE.Vector3(0, 5, -10); // Offset behind the controllable object
+const cameraOffset = new THREE.Vector3(0, 5, -10);
 const followSpeed = 0.1; 
 
 // === GRASS CUTTING CONFIGURATION ===
@@ -94,9 +93,9 @@ function cutGrassUnderObject() {
     
     if (currentTime - lastCutTime > CUT_INTERVAL) {
         const objectPosition = new THREE.Vector3(
-            controllableObject.position.x,
+            collisionBox.position.x,
             0,
-            controllableObject.position.z
+            collisionBox.position.z
         );
         
         grass.checkAndCutGrass(objectPosition, CUT_RADIUS);
@@ -113,18 +112,24 @@ renderer.setAnimationLoop((time) => {
     
     // Handle movement
     if (keys['w']) {
-        controllableObject.position.x += Math.sin(controllableObject.rotation.y) * moveSpeed;
-        controllableObject.position.z += Math.cos(controllableObject.rotation.y) * moveSpeed;
+        collisionBox.position.x += Math.sin(collisionBox.rotation.y) * moveSpeed;
+        collisionBox.position.z += Math.cos(collisionBox.rotation.y) * moveSpeed;
     }
     if (keys['s']) {
-        controllableObject.position.x -= Math.sin(controllableObject.rotation.y) * moveSpeed;
-        controllableObject.position.z -= Math.cos(controllableObject.rotation.y) * moveSpeed;
+        collisionBox.position.x -= Math.sin(collisionBox.rotation.y) * moveSpeed;
+        collisionBox.position.z -= Math.cos(collisionBox.rotation.y) * moveSpeed;
     }
     if (keys['a']) {
-        controllableObject.rotation.y += rotationSpeed;
+        collisionBox.rotation.y += rotationSpeed;
     }
     if (keys['d']) {
-        controllableObject.rotation.y -= rotationSpeed;
+        collisionBox.rotation.y -= rotationSpeed;
+    }
+
+    // Sync mower model with collision box
+    if (mowerModel) {
+        mowerModel.position.copy(collisionBox.position);
+        mowerModel.rotation.y = collisionBox.rotation.y; // Ensure it rotates with the box
     }
 
     // Cut grass when moving or when 'C' key is pressed
@@ -133,18 +138,18 @@ renderer.setAnimationLoop((time) => {
     }
 
     // Move the directional light with the player
-    directionalLight.position.x = controllableObject.position.x + 10;
-    directionalLight.position.z = controllableObject.position.z + 5;
+    directionalLight.position.x = collisionBox.position.x + 10;
+    directionalLight.position.z = collisionBox.position.z + 5;
 
     // Update grass
-    grass.update(time, controllableObject.position);
+    grass.update(time, collisionBox.position);
 
     // Smooth camera follow
-    const targetPosition = controllableObject.position.clone().add(
-        cameraOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), controllableObject.rotation.y)
+    const targetPosition = collisionBox.position.clone().add(
+        cameraOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), collisionBox.rotation.y)
     );
     camera.position.lerp(targetPosition, followSpeed);
-    camera.lookAt(controllableObject.position);
+    camera.lookAt(collisionBox.position);
 
     renderer.render(scene, camera);
 });
