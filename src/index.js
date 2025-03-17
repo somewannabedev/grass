@@ -51,9 +51,9 @@ scene.add(collisionBox);
 let mowerModel = null;
 
 const loader = new GLTFLoader();
-loader.load('/grassCutter/src/models/mower.gltf', function (gltf) {
+loader.load('/grassCutter/src/models/blueMower.glb', function (gltf) {
     mowerModel = gltf.scene;
-    mowerModel.scale.set(2, 2, 2);
+    mowerModel.scale.set(10, 15, 10);
     mowerModel.position.copy(collisionBox.position);
     scene.add(mowerModel);
 }, undefined, function (error) {

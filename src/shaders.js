@@ -137,7 +137,7 @@ export const fragmentShader = /* glsl */ `
       vec3(0.55, 0.55, 0.25), // Stage 1: Early growth (yellowish-brown)
       vec3(0.5, 0.6, 0.3),    // Stage 2: Mid growth (yellow-green)
       vec3(0.5, 0.65, 0.35),  // Stage 3: Late growth (light green)
-      vec3(0.5, 0.7, 0.4)     // Stage 4: Fully grown (green)
+      vec3(0.5, 0.7, 0.0)     // Stage 4: Fully grown (green)
     );
     
     // Convert growth progress to stage index
