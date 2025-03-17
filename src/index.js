@@ -53,8 +53,8 @@ let mowerModel = null;
 const loader = new GLTFLoader();
 loader.load('/grassCutter/src/models/mower.gltf', function (gltf) {
     mowerModel = gltf.scene;
-    mowerModel.scale.set(1.5, 1.5, 1.5);
-    mowerModel.position.copy(collisionBox.position); // Set initial position
+    mowerModel.scale.set(2, 2, 2);
+    mowerModel.position.copy(collisionBox.position);
     scene.add(mowerModel);
 }, undefined, function (error) {
     console.error(error);
@@ -78,16 +78,47 @@ document.addEventListener('keyup', (event) => {
     }
 });
 
-// Camera follow settings
+// === CAMERA CONTROLS ===
 const cameraOffset = new THREE.Vector3(0, 5, -10);
-const followSpeed = 0.1; 
+const followSpeed = 0.1;
+
+let isDragging = false;
+let previousMouseX = 0;
+let previousMouseY = 0;
+let cameraRotationX = 0;
+let cameraRotationY = 0;
+let returnToFollow = false;
+
+document.addEventListener('mousedown', (event) => {
+    isDragging = true;
+    previousMouseX = event.clientX;
+    previousMouseY = event.clientY;
+    returnToFollow = false;
+});
+
+document.addEventListener('mousemove', (event) => {
+    if (isDragging) {
+        let deltaX = (event.clientX - previousMouseX) * 0.005; // Sensitivity
+        let deltaY = (event.clientY - previousMouseY) * 0.005;
+
+        cameraRotationX += deltaX;
+        cameraRotationY = Math.min(Math.max(cameraRotationY + deltaY, -1.2), 1.2); // Limit up/down rotation
+
+        previousMouseX = event.clientX;
+        previousMouseY = event.clientY;
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    isDragging = false;
+    returnToFollow = true;
+});
 
 // === GRASS CUTTING CONFIGURATION ===
 const CUT_RADIUS = 1.2;
 const CUT_INTERVAL = 100;
 let lastCutTime = 0;
 
-// Function to handle grass cutting
 function cutGrassUnderObject() {
     const currentTime = Date.now();
     
@@ -129,7 +160,7 @@ renderer.setAnimationLoop((time) => {
     // Sync mower model with collision box
     if (mowerModel) {
         mowerModel.position.copy(collisionBox.position);
-        mowerModel.rotation.y = collisionBox.rotation.y; // Ensure it rotates with the box
+        mowerModel.rotation.y = collisionBox.rotation.y;
     }
 
     // Cut grass when moving or when 'C' key is pressed
@@ -141,15 +172,28 @@ renderer.setAnimationLoop((time) => {
     directionalLight.position.x = collisionBox.position.x + 10;
     directionalLight.position.z = collisionBox.position.z + 5;
 
-    // Update grass
-    grass.update(time, collisionBox.position);
+    // Camera logic
+    if (returnToFollow) {
+        cameraRotationX *= 0.9; // Smooth return to default
+        cameraRotationY *= 0.9;
+        if (Math.abs(cameraRotationX) < 0.01 && Math.abs(cameraRotationY) < 0.01) {
+            returnToFollow = false;
+            cameraRotationX = 0;
+            cameraRotationY = 0;
+        }
+    }
 
-    // Smooth camera follow
     const targetPosition = collisionBox.position.clone().add(
-        cameraOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), collisionBox.rotation.y)
+        cameraOffset.clone()
+            .applyAxisAngle(new THREE.Vector3(0, 1, 0), collisionBox.rotation.y + cameraRotationX)
     );
+    targetPosition.y += cameraRotationY * 5; // Vertical movement
+
     camera.position.lerp(targetPosition, followSpeed);
     camera.lookAt(collisionBox.position);
+
+    // Update grass
+    grass.update(time, collisionBox.position);
 
     renderer.render(scene, camera);
 });
