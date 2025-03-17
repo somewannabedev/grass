@@ -71,7 +71,6 @@ let lastCutTime = 0;               // Last time grass was cut
 const moveSpeed = 0.1;
 const jumpStrength = 0.8;
 
-
 // Movement controls
 const keys = { 'w': false, 'a': false, 's': false, 'd': false, 'space': false, 'c': false };
 document.addEventListener('keydown', (event) => {
@@ -131,7 +130,6 @@ function cutGrassUnderObject() {
         lastCutTime = currentTime;
     }
 }
-
 // Animation loop
 let lastTime = 0;
 renderer.setAnimationLoop((time) => {

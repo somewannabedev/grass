@@ -16,6 +16,7 @@ const BLADE_TIP_OFFSET = 0.1;     // Tip bending offset for more natural look
 const CUT_RADIUS = 1.0;           // Default radius of grass cutting
 const REGROWTH_TIME = 10000;      // Time in ms for grass to fully regrow
 const GROWTH_STAGES = 5;          // Number of growth stages (including fully cut and fully grown)
+const MAX_CUT_AREAS = 20;         // Maximum number of cut areas to track (IMPORTANT: must match shader)
 
 // === INTERPOLATION FUNCTION ===
 // Used to map values from one range to another
@@ -138,15 +139,20 @@ class Grass extends THREE.Object3D {
     // Create texture for storing cut areas
     this.cutTexture = this.createCutTexture();
     
+    // Pre-allocate arrays for cut areas to avoid reallocations
+    // This is important for WebGL performance
+    const cutAreasArray = new Float32Array(MAX_CUT_AREAS * 8); // 8 values per cut area
+    
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uCloud: { value: cloudTexture }, // Cloud texture for variation
         uTime: { value: 0 }, // Time uniform (used for animation)
         uObjectPosition: { value: new THREE.Vector3() }, // Player position (for interaction effects)
-        uCutAreas: { value: [] }, // Array of cut areas
+        uCutAreas: { value: cutAreasArray }, // Array of cut areas (pre-allocated)
         uCutAreasCount: { value: 0 }, // Number of cut areas
         uRegrowthTime: { value: REGROWTH_TIME }, // Time for grass to fully regrow
-        uCurrentTime: { value: 0 } // Current time (for regrowth calculation)
+        uCurrentTime: { value: 0 }, // Current time (for regrowth calculation)
+        uGrowthStages: { value: GROWTH_STAGES } // Number of growth stages
       },
       side: THREE.DoubleSide, // Render both sides of the grass blades
       vertexShader,
@@ -190,6 +196,11 @@ class Grass extends THREE.Object3D {
   cutGrass(position, radius = CUT_RADIUS) {
     const currentTime = Date.now();
     
+    // If we've reached the maximum number of cut areas, remove the oldest one
+    if (this.cutAreas.length >= MAX_CUT_AREAS) {
+      this.cutAreas.shift(); // Remove the oldest cut area
+    }
+    
     // Add new cut area
     this.cutAreas.push({
       position: new THREE.Vector3(position.x, 0, position.z),
@@ -199,26 +210,37 @@ class Grass extends THREE.Object3D {
     
     // Update shader uniforms with cut area information
     this.updateCutAreasUniform();
-    
-    // Optional: Log cut action
-    console.log(`Grass cut at [${position.x.toFixed(2)}, ${position.z.toFixed(2)}] with radius ${radius}`);
   }
   
   // === UPDATE CUT AREAS UNIFORM ===
   updateCutAreasUniform() {
-    // Format cut areas for shader
-    const cutAreasData = [];
-    for (const area of this.cutAreas) {
-      cutAreasData.push(
-        area.position.x, area.position.y, area.position.z, 
-        area.radius, area.cutTime, 0, 0, 0 // Pack into vec4s (needs padding)
-      );
+    // Get uniform from the material
+    let cutAreasUniform;
+    this.traverse((child) => {
+      if (child.material && child.material.uniforms) {
+        cutAreasUniform = child.material.uniforms.uCutAreas;
+      }
+    });
+    
+    if (!cutAreasUniform) return;
+    
+    // Get the buffer to store data
+    const cutAreasData = cutAreasUniform.value;
+    
+    // Fill buffer with cut area data
+    for (let i = 0; i < this.cutAreas.length; i++) {
+      const area = this.cutAreas[i];
+      cutAreasData[i * 8] = area.position.x;
+      cutAreasData[i * 8 + 1] = area.position.y;
+      cutAreasData[i * 8 + 2] = area.position.z;
+      cutAreasData[i * 8 + 3] = area.radius;
+      cutAreasData[i * 8 + 4] = area.cutTime;
+      // Other values are padding (leave as 0)
     }
     
     // Update shader uniforms
     this.traverse((child) => {
       if (child.material && child.material.uniforms) {
-        child.material.uniforms.uCutAreas.value = cutAreasData;
         child.material.uniforms.uCutAreasCount.value = this.cutAreas.length;
       }
     });

@@ -3,11 +3,12 @@ export const vertexShader = /* glsl */ `
   uniform float uTime;
   uniform vec3 uObjectPosition; // Position of the controllable object
   
-  // Cut areas information
-  uniform float uCutAreas[200]; // Array of cut areas data (x,y,z,radius,cutTime,0,0,0)
+  // Cut areas information - IMPORTANT: this must match MAX_CUT_AREAS in the JS file
+  uniform float uCutAreas[160]; // Array of cut areas data (x,y,z,radius,cutTime,0,0,0) - 8 values per area * 20 areas
   uniform int uCutAreasCount; // Number of cut areas
   uniform float uRegrowthTime; // Time for grass to fully regrow
   uniform float uCurrentTime; // Current time for regrowth calculation
+  uniform int uGrowthStages; // Number of growth stages
 
   // Variables passed from vertex shader to fragment shader
   varying vec3 vPosition; // Position of the vertex
@@ -28,7 +29,7 @@ export const vertexShader = /* glsl */ `
     float minGrowthStage = 1.0; // Start with fully grown
     
     // Check each cut area
-    for (int i = 0; i < 200; i++) {
+    for (int i = 0; i < 20; i++) { // Hard-coded limit to match MAX_CUT_AREAS
       if (i >= uCutAreasCount) break; // Stop when we've checked all cut areas
       
       // Get cut area data
@@ -44,8 +45,13 @@ export const vertexShader = /* glsl */ `
         // Calculate time since cut
         float timeSinceCut = uCurrentTime - cutTime;
         
-        // Calculate growth stage based on time (0.0 = fully cut, 1.0 = fully grown)
-        float growthProgress = clamp(timeSinceCut / uRegrowthTime, 0.0, 1.0);
+        // Calculate growth stage based on time using discrete stages
+        float stageTime = uRegrowthTime / float(uGrowthStages);
+        int currentStage = int(timeSinceCut / stageTime);
+        float growthProgress = float(currentStage) / float(uGrowthStages - 1);
+        
+        // Clamp to ensure we don't exceed 1.0
+        growthProgress = clamp(growthProgress, 0.0, 1.0);
         
         // Use the minimum growth stage (most recent cut takes precedence)
         minGrowthStage = min(minGrowthStage, growthProgress);
@@ -111,6 +117,7 @@ export const vertexShader = /* glsl */ `
 export const fragmentShader = /* glsl */ `
   // Cloud texture sampler for adding subtle variation to grass color
   uniform sampler2D uCloud;
+  uniform int uGrowthStages; // Number of growth stages
 
   // Values received from vertex shader
   varying vec3 vPosition;
@@ -119,26 +126,41 @@ export const fragmentShader = /* glsl */ `
   varying float vGrowthStage; // Growth stage from vertex shader
 
   // Base grass color
-  //vec3 green = vec3(0.2, 0.6, 0.3); //original green
-  //vec3 green = vec3(0.5, 0.4, 0.8); //purple
-  //vec3 green = vec3(0.8, 0.0, 0.1); //red
-  //vec3 green = vec3(1.0, 1.0, 0.8); //cream/yellow
-  //vec3 green = vec3(0.36, 0.62, 0.76); //blue
-  //vec3 green = vec3(0.5, 0.8, 0.2); //green
-  vec3 green = vec3(0.5, 0.7, 0.4); //green
+  vec3 green = vec3(0.5, 0.7, 0.4); // green
   
   // Cut grass color (brownish)
   vec3 cutGreen = vec3(0.6, 0.5, 0.2); // Brownish color for freshly cut grass
 
-  void main() {
-    // Vary color based on blade height - darker at base, brighter at tips
-    vec3 heightColor = mix(green * 0.7, green, vPosition.y);
+  // Function to get color based on growth stage
+  vec3 getGrowthColor(float growthStage) {
+    // Define colors for each growth stage (from cut to fully grown)
+    vec3 colors[5] = vec3[5](
+      vec3(0.6, 0.5, 0.2),   // Stage 0: Freshly cut (brown)
+      vec3(0.55, 0.55, 0.25), // Stage 1: Early growth (yellowish-brown)
+      vec3(0.5, 0.6, 0.3),   // Stage 2: Mid growth (yellow-green)
+      vec3(0.5, 0.65, 0.35), // Stage 3: Late growth (light green)
+      vec3(0.5, 0.7, 0.4)    // Stage 4: Fully grown (green)
+    );
     
-    // Blend between cut color and normal color based on growth stage
-    vec3 growthColor = mix(cutGreen, heightColor, vGrowthStage);
+    // Calculate which stage we're in and how far through it
+    float stageSize = 1.0 / float(uGrowthStages - 1);
+    int currentStage = int(growthStage / stageSize);
+    int nextStage = min(currentStage + 1, uGrowthStages - 1);
+    float stageProgress = (growthStage - float(currentStage) * stageSize) / stageSize;
+    
+    // Interpolate between current and next stage colors
+    return mix(colors[currentStage], colors[nextStage], stageProgress);
+  }
+
+  void main() {
+    // Get color based on growth stage
+    vec3 growthColor = getGrowthColor(vGrowthStage);
+    
+    // Vary color based on blade height - darker at base, brighter at tips
+    vec3 heightColor = mix(growthColor * 0.7, growthColor, vPosition.y);
     
     // Final grass color
-    vec3 color = growthColor;
+    vec3 color = heightColor;
 
     // Mix in cloud texture for natural color variation
     color = mix(color, texture2D(uCloud, vUv).rgb, 0.4);
