@@ -12,6 +12,11 @@ const BLADE_HEIGHT_VARIATION = 0.6; // Random height variation for realism
 const BLADE_VERTEX_COUNT = 5;     // Number of vertices per blade
 const BLADE_TIP_OFFSET = 0.1;     // Tip bending offset for more natural look
 
+// === CUT GRASS CONFIGURATION ===
+const CUT_RADIUS = 1.0;           // Default radius of grass cutting
+const REGROWTH_TIME = 10000;      // Time in ms for grass to fully regrow
+const GROWTH_STAGES = 5;          // Number of growth stages (including fully cut and fully grown)
+
 // === INTERPOLATION FUNCTION ===
 // Used to map values from one range to another
 // Example: Convert (x, y) position to a (0,1) UV coordinate for textures
@@ -29,6 +34,9 @@ export class GrassGeometry extends THREE.BufferGeometry {
     const positions = []; // Stores vertex positions
     const uvs = [];       // Stores texture mapping coordinates
     const indices = [];   // Stores how vertices form triangles
+    
+    // Store blade positions for later reference (needed for cutting)
+    this.bladePositions = [];
 
     // Loop to create multiple grass blades
     for (let i = 0; i < count; i++) {
@@ -39,6 +47,9 @@ export class GrassGeometry extends THREE.BufferGeometry {
       // Random position within rectangle bounds
       const x = (Math.random() * width) - halfWidth;  // Random x position (-halfWidth to halfWidth)
       const z = (Math.random() * length) - halfLength; // Random z position (-halfLength to halfLength)
+      
+      // Store blade base position for cutting detection
+      this.bladePositions.push([x, 0, z]);
       
       // Store UV coordinates for texturing
       uvs.push(
@@ -112,13 +123,30 @@ class Grass extends THREE.Object3D {
   constructor(width, length, count) {
     super();
     
+    // Store dimensions
+    this.width = width;
+    this.length = length;
+    this.count = count;
+    
     // Create grass geometry and custom shader material
     const geometry = new GrassGeometry(width, length, count);
+    this.geometry = geometry;  // Save reference to geometry
+    
+    // Initialize cut areas array - each entry contains position, radius, cutTime
+    this.cutAreas = [];
+    
+    // Create texture for storing cut areas
+    this.cutTexture = this.createCutTexture();
+    
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uCloud: { value: cloudTexture }, // Cloud texture for variation
         uTime: { value: 0 }, // Time uniform (used for animation)
-        uObjectPosition: { value: new THREE.Vector3() } // Player position (for interaction effects)
+        uObjectPosition: { value: new THREE.Vector3() }, // Player position (for interaction effects)
+        uCutAreas: { value: [] }, // Array of cut areas
+        uCutAreasCount: { value: 0 }, // Number of cut areas
+        uRegrowthTime: { value: REGROWTH_TIME }, // Time for grass to fully regrow
+        uCurrentTime: { value: 0 } // Current time (for regrowth calculation)
       },
       side: THREE.DoubleSide, // Render both sides of the grass blades
       vertexShader,
@@ -149,16 +177,100 @@ class Grass extends THREE.Object3D {
     // Add floor to this object
     this.add(floor);
   }
+  
+  // Create a texture to represent cut areas (more efficient than using arrays for large numbers of cut areas)
+  createCutTexture(resolution = 256) {
+    const data = new Float32Array(resolution * resolution * 4);
+    const texture = new THREE.DataTexture(data, resolution, resolution, THREE.RGBAFormat, THREE.FloatType);
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  // === CUT GRASS AT SPECIFIED POSITION ===
+  cutGrass(position, radius = CUT_RADIUS) {
+    const currentTime = Date.now();
+    
+    // Add new cut area
+    this.cutAreas.push({
+      position: new THREE.Vector3(position.x, 0, position.z),
+      radius: radius,
+      cutTime: currentTime
+    });
+    
+    // Update shader uniforms with cut area information
+    this.updateCutAreasUniform();
+    
+    // Optional: Log cut action
+    console.log(`Grass cut at [${position.x.toFixed(2)}, ${position.z.toFixed(2)}] with radius ${radius}`);
+  }
+  
+  // === UPDATE CUT AREAS UNIFORM ===
+  updateCutAreasUniform() {
+    // Format cut areas for shader
+    const cutAreasData = [];
+    for (const area of this.cutAreas) {
+      cutAreasData.push(
+        area.position.x, area.position.y, area.position.z, 
+        area.radius, area.cutTime, 0, 0, 0 // Pack into vec4s (needs padding)
+      );
+    }
+    
+    // Update shader uniforms
+    this.traverse((child) => {
+      if (child.material && child.material.uniforms) {
+        child.material.uniforms.uCutAreas.value = cutAreasData;
+        child.material.uniforms.uCutAreasCount.value = this.cutAreas.length;
+      }
+    });
+  }
+
+  // === REGROW GRASS (REMOVE OLD CUT AREAS) ===
+  regrowGrass() {
+    const currentTime = Date.now();
+    
+    // Remove fully regrown areas
+    this.cutAreas = this.cutAreas.filter(area => {
+      const timeSinceCut = currentTime - area.cutTime;
+      return timeSinceCut < REGROWTH_TIME;
+    });
+    
+    // Update shader uniforms if anything changed
+    this.updateCutAreasUniform();
+  }
 
   // === UPDATE FUNCTION (CALLED EVERY FRAME) ===
   update(time, objectPosition) {
+    // Process regrowth
+    this.regrowGrass();
+    
     // Update all materials in this object
     this.traverse((child) => {
       if (child.material && child.material.uniforms) {
         child.material.uniforms.uTime.value = time; // Update animation time
+        child.material.uniforms.uCurrentTime.value = Date.now(); // Current time for regrowth
         child.material.uniforms.uObjectPosition.value.copy(objectPosition); // Update player position for interaction effects
       }
     });
+  }
+  
+  // Check if position is over grass and cut it if so
+  checkAndCutGrass(position, radius = CUT_RADIUS) {
+    // Get half dimensions of the grass field
+    const halfWidth = this.width / 2;
+    const halfLength = this.length / 2;
+    
+    // Check if position is within grass boundaries
+    if (
+      position.x >= -halfWidth && 
+      position.x <= halfWidth && 
+      position.z >= -halfLength && 
+      position.z <= halfLength
+    ) {
+      this.cutGrass(position, radius);
+      return true;
+    }
+    
+    return false;
   }
 }
 

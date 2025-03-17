@@ -62,20 +62,25 @@ controllableObject.castShadow = true;
 controllableObject.position.set(0, 0.5, 0);
 scene.add(controllableObject);
 
+// === GRASS CUTTING CONFIGURATION ===
+const CUT_RADIUS = 1.2;            // Radius of grass cutting
+const CUT_INTERVAL = 100;          // Milliseconds between cuts
+let lastCutTime = 0;               // Last time grass was cut
+
 // Movement settings
 const moveSpeed = 0.1;
 const jumpStrength = 0.8;
 
 
 // Movement controls
-const keys = { 'w': false, 'a': false, 's': false, 'd': false, 'space': false };
+const keys = { 'w': false, 'a': false, 's': false, 'd': false, 'space': false, 'c': false };
 document.addEventListener('keydown', (event) => {
     switch (event.key.toLowerCase()) {
         case 'w': keys['w'] = true; break;
         case 'a': keys['a'] = true; break;
         case 's': keys['s'] = true; break;
         case 'd': keys['d'] = true; break;
-
+        case 'c': keys['c'] = true; break; // Add 'C' key for manual cutting
     }
 });
 document.addEventListener('keyup', (event) => {
@@ -84,6 +89,7 @@ document.addEventListener('keyup', (event) => {
         case 'a': keys['a'] = false; break;
         case 's': keys['s'] = false; break;
         case 'd': keys['d'] = false; break;
+        case 'c': keys['c'] = false; break;
     }
 });
 
@@ -105,8 +111,34 @@ function keepPlayerCentered() {
 const cameraOffset = new THREE.Vector3(12, 7, 12);
 const followSpeed = 0.1; // Adjusts how smoothly the camera follows the sphere
 
+// Function to handle grass cutting
+function cutGrassUnderObject() {
+    const currentTime = Date.now();
+    
+    // Only cut at intervals to avoid too many cut areas
+    if (currentTime - lastCutTime > CUT_INTERVAL) {
+        // Create a position vector for the controllable object
+        const objectPosition = new THREE.Vector3(
+            controllableObject.position.x,
+            0, // Keep at ground level
+            controllableObject.position.z
+        );
+        
+        // Cut grass at the object's position
+        grass.checkAndCutGrass(objectPosition, CUT_RADIUS);
+        
+        // Update last cut time
+        lastCutTime = currentTime;
+    }
+}
+
 // Animation loop
-renderer.setAnimationLoop(() => {
+let lastTime = 0;
+renderer.setAnimationLoop((time) => {
+    // Calculate delta time
+    const deltaTime = time - lastTime;
+    lastTime = time;
+    
     // Movement
     if (keys['w']) controllableObject.position.z -= moveSpeed;
     if (keys['s']) controllableObject.position.z += moveSpeed;
@@ -116,9 +148,17 @@ renderer.setAnimationLoop(() => {
     // Keep player within corridor boundaries
     keepPlayerCentered();    
 
+    // Cut grass when moving or when 'C' key is pressed
+    if (keys['w'] || keys['a'] || keys['s'] || keys['d'] || keys['c']) {
+        cutGrassUnderObject();
+    }
+
     // Move the directional light with the player
     directionalLight.position.x = controllableObject.position.x + 10;
     directionalLight.position.z = controllableObject.position.z + 5;
+
+    // Update grass (animations, regrowth, etc.)
+    grass.update(time, controllableObject.position);
 
     // Smooth camera following
     const desiredPosition = controllableObject.position.clone().add(cameraOffset);
@@ -128,4 +168,14 @@ renderer.setAnimationLoop(() => {
     // Update camera controls (smooth movement effect)
     controls.update();
     renderer.render(scene, camera);
+});
+
+// Handle window resizing
+window.addEventListener('resize', () => {
+    // Update camera aspect ratio
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    
+    // Update renderer size
+    renderer.setSize(window.innerWidth, window.innerHeight);
 });
