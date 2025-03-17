@@ -14,9 +14,9 @@ const BLADE_TIP_OFFSET = 0.1;     // Tip bending offset for more natural look
 
 // === CUT GRASS CONFIGURATION ===
 const CUT_RADIUS = 1.0;           // Default radius of grass cutting
-const REGROWTH_TIME = 10000;      // Time in ms for grass to fully regrow
+const REGROWTH_TIME = 20000;      // Time in ms for grass to fully regrow
 const GROWTH_STAGES = 5;          // Number of growth stages (including fully cut and fully grown)
-const MAX_CUT_AREAS = 20;         // Maximum number of cut areas to track (IMPORTANT: must match shader)
+const MAX_CUT_AREAS = 200;         // Maximum number of cut areas to track (IMPORTANT: must match shader)
 
 // === INTERPOLATION FUNCTION ===
 // Used to map values from one range to another

@@ -4,7 +4,7 @@ export const vertexShader = /* glsl */ `
   uniform vec3 uObjectPosition; // Position of the controllable object
   
   // Cut areas information - IMPORTANT: this must match MAX_CUT_AREAS in the JS file
-  uniform float uCutAreas[160]; // Array of cut areas data (x,y,z,radius,cutTime,0,0,0) - 8 values per area * 20 areas
+  uniform float uCutAreas[1600]; // Array of cut areas data (x,y,z,radius,cutTime,0,0,0) - 8 values per area * 20 areas
   uniform int uCutAreasCount; // Number of cut areas
   uniform float uRegrowthTime; // Time for grass to fully regrow
   uniform float uCurrentTime; // Current time for regrowth calculation
@@ -29,7 +29,7 @@ export const vertexShader = /* glsl */ `
     float minGrowthStage = 1.0; // Start with fully grown
     
     // Check each cut area
-    for (int i = 0; i < 20; i++) { // Hard-coded limit to match MAX_CUT_AREAS
+    for (int i = 0; i < 200; i++) { // Hard-coded limit to match MAX_CUT_AREAS
       if (i >= uCutAreasCount) break; // Stop when we've checked all cut areas
       
       // Get cut area data
