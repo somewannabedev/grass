@@ -4,7 +4,7 @@ export const vertexShader = /* glsl */ `
   uniform vec3 uObjectPosition; // Position of the controllable object
   
   // Cut areas information - IMPORTANT: this must match MAX_CUT_AREAS in the JS file
-  uniform float uCutAreas[1600]; // Array of cut areas data (x,y,z,radius,cutTime,0,0,0) - 8 values per area * 20 areas
+  uniform float uCutAreas[1600]; // Array of cut areas data (x,y,z,radius,cutTime,0,0,0) - 8 values per area * 200 areas
   uniform int uCutAreasCount; // Number of cut areas
   uniform float uRegrowthTime; // Time for grass to fully regrow
   uniform float uCurrentTime; // Current time for regrowth calculation
@@ -24,7 +24,7 @@ export const vertexShader = /* glsl */ `
   }
   
   // Function to check if a vertex is in a cut area
-  // Returns growth stage (0.0 = fully cut, 1.0 = fully grown)
+  // Returns growth progress (0.0 = just cut, 1.0 = fully grown)
   float getGrowthStage(vec3 position) {
     float minGrowthStage = 1.0; // Start with fully grown
     
@@ -45,12 +45,8 @@ export const vertexShader = /* glsl */ `
         // Calculate time since cut
         float timeSinceCut = uCurrentTime - cutTime;
         
-        // Calculate growth stage based on time using discrete stages
-        float stageTime = uRegrowthTime / float(uGrowthStages);
-        int currentStage = int(timeSinceCut / stageTime);
-        float growthProgress = float(currentStage) / float(uGrowthStages - 1);
-        
-        // Clamp to ensure we don't exceed 1.0
+        // Calculate growth progress (0.0 = just cut, 1.0 = fully grown)
+        float growthProgress = timeSinceCut / uRegrowthTime;
         growthProgress = clamp(growthProgress, 0.0, 1.0);
         
         // Use the minimum growth stage (most recent cut takes precedence)
@@ -79,7 +75,9 @@ export const vertexShader = /* glsl */ `
       bool isBottomVertex = (gl_VertexID % 5 == 0 || gl_VertexID % 5 == 1);
       
       if (!isBottomVertex) {
-        vPosition.y *= growthStage;
+        // Apply direct growth stage scaling to vertices above ground
+        float heightMultiplier = max(0.1, vGrowthStage); // Keep a tiny bit of height even when fully cut
+        vPosition.y *= heightMultiplier;
       }
       
       // Only add wave effect to uncut or partially regrown grass
@@ -126,30 +124,37 @@ export const fragmentShader = /* glsl */ `
   varying float vGrowthStage; // Growth stage from vertex shader
 
   // Base grass color
-  vec3 green = vec3(0.5, 0.7, 0.4); // green
+  vec3 green = vec3(0.1, 0.1, 0.1); // green //doesn't do anything - grass is stage 4 colour on spawn
   
   // Cut grass color (brownish)
-  vec3 cutGreen = vec3(0.6, 0.5, 0.2); // Brownish color for freshly cut grass
+  vec3 cutGreen = vec3(0.1, 0.1, 0.1); // Brownish color for freshly cut grass
 
   // Function to get color based on growth stage
-  vec3 getGrowthColor(float growthStage) {
+  vec3 getGrowthColor(float growthProgress) {
     // Define colors for each growth stage (from cut to fully grown)
     vec3 colors[5] = vec3[5](
-      vec3(0.6, 0.5, 0.2),   // Stage 0: Freshly cut (brown)
+      vec3(0.6, 0.5, 0.2),    // Stage 0: Freshly cut (brown)
       vec3(0.55, 0.55, 0.25), // Stage 1: Early growth (yellowish-brown)
-      vec3(0.5, 0.6, 0.3),   // Stage 2: Mid growth (yellow-green)
-      vec3(0.5, 0.65, 0.35), // Stage 3: Late growth (light green)
-      vec3(0.5, 0.7, 0.4)    // Stage 4: Fully grown (green)
+      vec3(0.5, 0.6, 0.3),    // Stage 2: Mid growth (yellow-green)
+      vec3(0.5, 0.65, 0.35),  // Stage 3: Late growth (light green)
+      vec3(0.5, 0.7, 0.4)     // Stage 4: Fully grown (green)
     );
     
-    // Calculate which stage we're in and how far through it
-    float stageSize = 1.0 / float(uGrowthStages - 1);
-    int currentStage = int(growthStage / stageSize);
-    int nextStage = min(currentStage + 1, uGrowthStages - 1);
-    float stageProgress = (growthStage - float(currentStage) * stageSize) / stageSize;
+    // Convert growth progress to stage index
+    float stageCount = float(uGrowthStages - 1);
+    float stagePosition = growthProgress * stageCount;
+    int currentStage = int(floor(stagePosition));
+    float stageProgress = fract(stagePosition);
     
-    // Interpolate between current and next stage colors
-    return mix(colors[currentStage], colors[nextStage], stageProgress);
+    // Make sure we don't exceed array bounds
+    currentStage = min(currentStage, uGrowthStages - 1);
+    
+    // Get current stage color and next stage color
+    vec3 currentColor = colors[currentStage];
+    vec3 nextColor = colors[min(currentStage + 1, uGrowthStages - 1)];
+    
+    // Blend between current and next color based on progress within this stage
+    return mix(currentColor, nextColor, stageProgress);
   }
 
   void main() {
@@ -169,12 +174,9 @@ export const fragmentShader = /* glsl */ `
     float lighting = dot(vNormal, normalize(vec3(1, 1, 0))); // Directional light from top-right
     color += lighting * 0.1; // Slightly increase brightness based on lighting
     
-    // Adjust alpha for very short cut grass to create patchy effect
+    // Set alpha to 1.0 (fully opaque) regardless of growth stage
     float alpha = 1.0;
-    if (vGrowthStage < 0.15 && vPosition.y < 0.1) {
-      alpha = vGrowthStage * 6.0; // Fade out completely cut grass near ground level
-    }
-
+    
     // Set pixel color with lighting effect
     gl_FragColor = vec4(color, alpha);
   }

@@ -20,7 +20,7 @@ scene.background = new THREE.Color(0xf0f0f0);
 
 // Lighting
 const directionalLight = new THREE.DirectionalLight(0xffccaa, 1.5);
-directionalLight.position.set(10, 10, 5);
+directionalLight.position.set(0, 8, -15);
 directionalLight.castShadow = true;
 scene.add(directionalLight);
 
@@ -30,7 +30,7 @@ scene.add(ambientLight);
 // === TILE CONFIGURATION ===
 const TILE_WIDTH = 40;
 const TILE_LENGTH = 40;
-const BLADE_COUNT = 40000;
+const BLADE_COUNT = 80000;
 
 // Create a single grass tile
 const grass = new Grass(TILE_WIDTH, TILE_LENGTH, BLADE_COUNT);
@@ -66,10 +66,16 @@ const rotationSpeed = 0.02;
 
 // Movement controls
 const keys = { 'w': false, 'a': false, 's': false, 'd': false, 'c': false };
+let mowerDown = false; // Mower starts OFF
 
 document.addEventListener('keydown', (event) => {
     if (keys.hasOwnProperty(event.key.toLowerCase())) {
         keys[event.key.toLowerCase()] = true;
+    }
+
+    if (event.key.toLowerCase() === 'c') {
+        mowerDown = !mowerDown; // Toggle mower ON/OFF
+        updateMowerIndicator();
     }
 });
 document.addEventListener('keyup', (event) => {
@@ -79,7 +85,7 @@ document.addEventListener('keyup', (event) => {
 });
 
 // === CAMERA CONTROLS ===
-const cameraOffset = new THREE.Vector3(0, 5, -10);
+const cameraOffset = new THREE.Vector3(0, 8, -15);
 const followSpeed = 0.1;
 
 let isDragging = false;
@@ -120,6 +126,8 @@ const CUT_INTERVAL = 100;
 let lastCutTime = 0;
 
 function cutGrassUnderObject() {
+    if (!mowerDown) return; // Don't cut if mower is OFF
+
     const currentTime = Date.now();
     
     if (currentTime - lastCutTime > CUT_INTERVAL) {
@@ -133,6 +141,26 @@ function cutGrassUnderObject() {
         
         lastCutTime = currentTime;
     }
+}
+
+// === ADDING MOWER STATUS INDICATOR ===
+const mowerIndicator = document.createElement('div');
+mowerIndicator.style.position = 'absolute';
+mowerIndicator.style.top = '20px';
+mowerIndicator.style.left = '20px';
+mowerIndicator.style.padding = '10px 20px';
+mowerIndicator.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+mowerIndicator.style.color = 'white';
+mowerIndicator.style.fontSize = '18px';
+mowerIndicator.style.fontFamily = 'Arial, sans-serif';
+mowerIndicator.style.borderRadius = '5px';
+mowerIndicator.style.zIndex = '1000';
+mowerIndicator.innerText = 'Mower: OFF';
+document.body.appendChild(mowerIndicator);
+
+function updateMowerIndicator() {
+    mowerIndicator.innerText = mowerDown ? 'Mower: ON' : 'Mower: OFF';
+    mowerIndicator.style.backgroundColor = mowerDown ? 'rgba(0, 150, 0, 0.7)' : 'rgba(150, 0, 0, 0.7)';
 }
 
 // Animation loop
@@ -163,18 +191,14 @@ renderer.setAnimationLoop((time) => {
         mowerModel.rotation.y = collisionBox.rotation.y;
     }
 
-    // Cut grass when moving or when 'C' key is pressed
-    if (keys['w'] || keys['s'] || keys['a'] || keys['d'] || keys['c']) {
+    // Cut grass only if mower is ON
+    if ((keys['w'] || keys['s'] || keys['a'] || keys['d']) && mowerDown) {
         cutGrassUnderObject();
     }
 
-    // Move the directional light with the player
-    directionalLight.position.x = collisionBox.position.x + 10;
-    directionalLight.position.z = collisionBox.position.z + 5;
-
     // Camera logic
     if (returnToFollow) {
-        cameraRotationX *= 0.9; // Smooth return to default
+        cameraRotationX *= 0.9; 
         cameraRotationY *= 0.9;
         if (Math.abs(cameraRotationX) < 0.01 && Math.abs(cameraRotationY) < 0.01) {
             returnToFollow = false;
@@ -184,23 +208,13 @@ renderer.setAnimationLoop((time) => {
     }
 
     const targetPosition = collisionBox.position.clone().add(
-        cameraOffset.clone()
-            .applyAxisAngle(new THREE.Vector3(0, 1, 0), collisionBox.rotation.y + cameraRotationX)
+        cameraOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), collisionBox.rotation.y + cameraRotationX)
     );
-    targetPosition.y += cameraRotationY * 5; // Vertical movement
+    targetPosition.y += cameraRotationY * 5;
 
     camera.position.lerp(targetPosition, followSpeed);
     camera.lookAt(collisionBox.position);
 
-    // Update grass
     grass.update(time, collisionBox.position);
-
     renderer.render(scene, camera);
-});
-
-// Handle window resizing
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
 });

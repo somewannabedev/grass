@@ -13,7 +13,7 @@ const BLADE_VERTEX_COUNT = 5;     // Number of vertices per blade
 const BLADE_TIP_OFFSET = 0.1;     // Tip bending offset for more natural look
 
 // === CUT GRASS CONFIGURATION ===
-const CUT_RADIUS = 1.0;           // Default radius of grass cutting
+const CUT_RADIUS = 4.0;           // Default radius of grass cutting
 const REGROWTH_TIME = 20000;      // Time in ms for grass to fully regrow
 const GROWTH_STAGES = 5;          // Number of growth stages (including fully cut and fully grown)
 const MAX_CUT_AREAS = 200;         // Maximum number of cut areas to track (IMPORTANT: must match shader)
@@ -213,34 +213,34 @@ class Grass extends THREE.Object3D {
   }
   
   // === UPDATE CUT AREAS UNIFORM ===
+  // === UPDATE CUT AREAS UNIFORM ===
   updateCutAreasUniform() {
-    // Get uniform from the material
-    let cutAreasUniform;
+    const currentTime = Date.now();
+    
+    // Update uniform in all materials
     this.traverse((child) => {
       if (child.material && child.material.uniforms) {
-        cutAreasUniform = child.material.uniforms.uCutAreas;
-      }
-    });
-    
-    if (!cutAreasUniform) return;
-    
-    // Get the buffer to store data
-    const cutAreasData = cutAreasUniform.value;
-    
-    // Fill buffer with cut area data
-    for (let i = 0; i < this.cutAreas.length; i++) {
-      const area = this.cutAreas[i];
-      cutAreasData[i * 8] = area.position.x;
-      cutAreasData[i * 8 + 1] = area.position.y;
-      cutAreasData[i * 8 + 2] = area.position.z;
-      cutAreasData[i * 8 + 3] = area.radius;
-      cutAreasData[i * 8 + 4] = area.cutTime;
-      // Other values are padding (leave as 0)
-    }
-    
-    // Update shader uniforms
-    this.traverse((child) => {
-      if (child.material && child.material.uniforms) {
+        // Update current time first
+        child.material.uniforms.uCurrentTime.value = currentTime;
+        
+        // Get the buffer to store data
+        const cutAreasUniform = child.material.uniforms.uCutAreas;
+        if (!cutAreasUniform) return;
+        
+        const cutAreasData = cutAreasUniform.value;
+        
+        // Fill buffer with cut area data
+        for (let i = 0; i < this.cutAreas.length; i++) {
+          const area = this.cutAreas[i];
+          cutAreasData[i * 8] = area.position.x;
+          cutAreasData[i * 8 + 1] = area.position.y;
+          cutAreasData[i * 8 + 2] = area.position.z;
+          cutAreasData[i * 8 + 3] = area.radius;
+          cutAreasData[i * 8 + 4] = area.cutTime;
+          // Other values are padding (leave as 0)
+        }
+        
+        // Update count uniform
         child.material.uniforms.uCutAreasCount.value = this.cutAreas.length;
       }
     });
@@ -262,6 +262,8 @@ class Grass extends THREE.Object3D {
 
   // === UPDATE FUNCTION (CALLED EVERY FRAME) ===
   update(time, objectPosition) {
+    const currentTime = Date.now();
+    
     // Process regrowth
     this.regrowGrass();
     
@@ -269,7 +271,7 @@ class Grass extends THREE.Object3D {
     this.traverse((child) => {
       if (child.material && child.material.uniforms) {
         child.material.uniforms.uTime.value = time; // Update animation time
-        child.material.uniforms.uCurrentTime.value = Date.now(); // Current time for regrowth
+        child.material.uniforms.uCurrentTime.value = currentTime; // Ensure this is updated every frame
         child.material.uniforms.uObjectPosition.value.copy(objectPosition); // Update player position for interaction effects
       }
     });
